@@ -125,7 +125,6 @@
                 top: 100px; bottom: auto; left: 10px; right: 10px; transform: none;
                 display: flex; flex-direction: row; overflow-x: auto; grid-template-columns: none;
                 padding: 10px; gap: 15px; border-radius: 12px; white-space: nowrap;
-                /* Скрываем скроллбар для красоты */
                 scrollbar-width: none; 
             }
             #sidebar::-webkit-scrollbar { display: none; }
@@ -517,7 +516,17 @@
 
     function handleInteract(clientX, clientY, target) {
         if(target.closest('#sidebar') || target.closest('#info-panel') || target.closest('#top-left-panel') || target.closest('#bottom-panel') || target.closest('#info-toggle-btn')) return;
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Вычисляем точку касания ПЕРЕД проверкой орбиты
+        mouse.x = (clientX/window.innerWidth)*2-1; mouse.y = -(clientY/window.innerHeight)*2+1;
+        raycaster.setFromCamera(mouse, camera);
+        
         if (currentPlacingPlanet) {
+            // Принудительно устанавливаем позицию планеты в точку касания экрана
+            const pt = new THREE.Vector3(); 
+            raycaster.ray.intersectPlane(planeY, pt);
+            currentPlacingPlanet.mesh.position.copy(pt);
+
             if (Math.abs(currentPlacingPlanet.mesh.position.length() - currentPlacingPlanet.targetRadius) < 3.5) {
                 activePlanets.push(currentPlacingPlanet);
                 document.getElementById('status').innerText = i18n[currentLang].success;
@@ -526,8 +535,6 @@
             return;
         }
         
-        mouse.x = (clientX/window.innerWidth)*2-1; mouse.y = -(clientY/window.innerHeight)*2+1;
-        raycaster.setFromCamera(mouse, camera);
         const meshes = [sunCrust]; activePlanets.forEach(p => p.mesh.children.forEach(c => meshes.push(c)));
         const intersects = raycaster.intersectObjects(meshes);
         if(intersects.length > 0) {
@@ -549,7 +556,13 @@
             activePlanets.forEach(p => {
                 p.angle += p.speed;
                 p.mesh.position.set(Math.cos(p.angle)*p.targetRadius, 0, Math.sin(p.angle)*p.targetRadius);
-                p.mesh.children.forEach(c => { if (c.geometry.type === "SphereGeometry") c.rotation.y += 0.015; });
+                
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Защита (c.geometry &&) от ошибки при встрече с луной
+                p.mesh.children.forEach(c => { 
+                    if (c.geometry && c.geometry.type === "SphereGeometry") {
+                        c.rotation.y += 0.015; 
+                    }
+                });
                 if (p.mesh.userData.moonGroup) p.mesh.userData.moonGroup.rotation.y += p.mesh.userData.moonSpeed;
             });
         }
