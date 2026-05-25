@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Солнечная Система / Системаи Хуршедӣ</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #03030a; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; z-index: 1; }
+        
+        /* 3D Метки */
+        #labels-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+        .space-label {
+            position: absolute; color: white; font-weight: bold; font-size: 13px;
+            background: rgba(0, 0, 0, 0.65); padding: 4px 8px; border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.15); transform: translate(-50%, -100%);
+            white-space: nowrap; transition: opacity 0.3s; pointer-events: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .space-label::after {
+            content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%);
+            border-width: 5px 5px 0; border-style: solid; border-color: rgba(0, 0, 0, 0.65) transparent;
+        }
+        .space-label.sun-label { background: rgba(255, 85, 0, 0.75); border-color: #ffaa00; }
+        .space-label.sun-label::after { border-color: rgba(255, 85, 0, 0.75) transparent; }
+
+        /* Верхний UI */
+        #ui {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            color: white; text-align: center; pointer-events: none; z-index: 10;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.9); width: 40%;
+        }
+        h1 { margin: 0 0 5px 0; font-size: 22px; letter-spacing: 1px; }
+        #status { margin: 0; font-size: 14px; color: #00ffcc; font-weight: bold; }
+        
+        /* Панель Управления (Язык) */
+        #top-left-panel { position: absolute; top: 20px; left: 20px; z-index: 10; display: flex; gap: 10px; }
+        .btn { 
+            background: rgba(0,0,0,0.6); color: white; border: 1px solid rgba(255,255,255,0.2); 
+            padding: 8px 14px; cursor: pointer; border-radius: 6px; font-weight: bold; transition: 0.2s;
+            backdrop-filter: blur(5px); display: flex; align-items: center; gap: 6px;
+        }
+        .btn:hover { border-color: #00ffcc; background: rgba(0,0,0,0.8); }
+
+        /* Левое меню планет */
+        #sidebar {
+            position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
+            z-index: 10; background: rgba(5, 5, 20, 0.55); padding: 12px;
+            border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+        }
+        .planet-card {
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; transition: all 0.3s ease; padding: 5px; border-radius: 10px;
+        }
+        .planet-card:hover { transform: scale(1.08); }
+        .planet-card:hover .planet-img { box-shadow: 0 0 15px rgba(0, 255, 204, 0.6); border-color: #00ffcc; }
+        .planet-img {
+            width: 55px; height: 55px; border-radius: 50%; border: 2px solid #444;
+            background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: 0.2s;
+            object-fit: cover;
+        }
+        .planet-label { color: #ddd; font-size: 11px; margin-top: 6px; font-weight: bold; text-align: center; }
+
+        /* ИНФОРМАЦИОННАЯ ПАНЕЛЬ */
+        #info-panel {
+            position: absolute; right: -380px; top: 20px; bottom: 20px; width: 310px;
+            z-index: 10; background: rgba(10, 10, 25, 0.45); border: 1px solid rgba(0, 255, 204, 0.2);
+            border-radius: 16px; padding: 25px; color: white;
+            box-shadow: -5px 5px 25px rgba(0,0,0,0.6); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            transition: right 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+            overflow-y: auto; display: flex; flex-direction: column;
+        }
+        #info-panel.active { right: 20px; }
+        .info-title { font-size: 24px; color: #00ffcc; margin: 0 0 12px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .info-spec { background: rgba(0, 255, 204, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12.5px; line-height: 1.6; border: 1px solid rgba(0, 255, 204, 0.1); }
+        .info-spec span { color: #ffaa00; font-weight: bold; }
+        .info-text { font-size: 13.5px; line-height: 1.6; color: #e0e0e0; text-align: justify; margin-bottom: 15px; }
+        
+        /* Ссылки и кнопки в панели */
+        .info-links { margin-top: auto; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .info-btn { 
+            display: block; text-align: center; background: rgba(0, 255, 204, 0.15); color: #00ffcc; 
+            text-decoration: none; padding: 10px; margin-top: 8px; border-radius: 6px; font-size: 13px; 
+            font-weight: bold; transition: 0.2s; border: 1px solid rgba(0, 255, 204, 0.3); cursor: pointer;
+        }
+        .info-btn:hover { background: rgba(0, 255, 204, 0.3); color: white; box-shadow: 0 0 10px rgba(0,255,204,0.4); }
+        .focus-active { background: rgba(255, 50, 50, 0.2) !important; color: #ff6666 !important; border-color: #ff6666 !important; }
+        .focus-active:hover { background: rgba(255, 50, 50, 0.4) !important; color: white !important; box-shadow: 0 0 10px rgba(255,50,50,0.4) !important; }
+        
+        .close-info { position: absolute; top: 15px; right: 15px; background: none; border: none; color: #aaa; font-size: 18px; cursor: pointer; }
+        .close-info:hover { color: #ff3333; }
+
+        /* НИЖНЯЯ ПАНЕЛЬ (Разрез и Пауза) */
+        #bottom-panel {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            z-index: 10; background: rgba(5, 5, 20, 0.85); padding: 12px 25px;
+            border-radius: 12px; border: 1px solid rgba(0, 255, 204, 0.4);
+            color: white; backdrop-filter: blur(10px); display: flex; align-items: center; gap: 20px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.8);
+        }
+        #slice-controls { display: none; align-items: center; gap: 15px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 20px; }
+        #slice-slider { width: 150px; cursor: pointer; accent-color: #00ffcc; }
+        #pause-btn { border-color: rgba(0, 255, 204, 0.4); color: #00ffcc; background: rgba(0, 255, 204, 0.1); }
+        #pause-btn:hover { background: rgba(0, 255, 204, 0.25); }
+        #remove-slice-btn { border-color: rgba(255, 100, 100, 0.4); color: #ff6666; background: rgba(255, 0, 0, 0.1); padding: 6px 12px; font-size: 12px; }
+        #remove-slice-btn:hover { background: rgba(255, 0, 0, 0.3); color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="top-left-panel">
+        <button class="btn" onclick="toggleLanguage()">TJ / RU</button>
+    </div>
+
+    <div id="ui">
+        <h1 id="main-title">Собери Солнечную Систему</h1>
+        <p id="status">Выберите планету слева и кликом установите на её орбиту</p>
+    </div>
+
+    <div id="sidebar"></div>
+    <div id="labels-container"></div>
+    
+    <div id="info-panel">
+        <button class="close-info" onclick="hideInfoPanel()">✕</button>
+        <div id="info-content"></div>
+    </div>
+
+    <div id="bottom-panel">
+        <button class="btn" id="pause-btn" onclick="togglePause()">⏸ Пауза</button>
+        <div id="slice-controls">
+            <span id="slice-label" style="font-size: 13px; font-weight: bold; color: #00ffcc;">Разрез:</span>
+            <input type="range" id="slice-slider" min="-2" max="2" step="0.01" value="2">
+            <button class="btn" id="remove-slice-btn" onclick="removeSlice()">❌ Убрать</button>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+       // --- Текстуры для планет (Реалистичность) ---
+    // Используем стабильный публичный репозиторий для текстур
+    const TEXTURE_BASE = 'https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images/';
+    const TEXTURES = {
+        'Солнце': TEXTURE_BASE + 'sunmap.jpg',
+        'Меркурий': TEXTURE_BASE + 'mercurymap.jpg',
+        'Венера': TEXTURE_BASE + 'venusmap.jpg',
+        'Земля': TEXTURE_BASE + 'earthmap1k.jpg',
+        'Марс': TEXTURE_BASE + 'marsmap1k.jpg',
+        'Юпитер': TEXTURE_BASE + 'jupitermap.jpg',
+        'Сатурн': TEXTURE_BASE + 'saturnmap.jpg',
+        'Уран': TEXTURE_BASE + 'uranusmap.jpg',
+        'Нептун': TEXTURE_BASE + 'neptunemap.jpg',
+        'Кольцо': TEXTURE_BASE + 'saturnringcolor.jpg'
+    };
+
+    const textureLoader = new THREE.TextureLoader();
+    // Разрешаем загрузку с другого домена (CORS)
+    textureLoader.crossOrigin = 'Anonymous';
+
+        // --- База Данных Энциклопедии ---
+        const spaceEncyclopedia = {
+            ru: {
+                'Солнце': { title: 'Солнце', spec: '<span>Тип:</span> Жёлтый карлик (G2V)<br><span>Диаметр:</span> 1,392,700 км<br><span>Температура ядра:</span> ~15,000,000 °C<br><span>Внутренние слои:</span> Ядро -> Лучистая зона -> Корона', text: 'Центральная звезда Солнечной системы. В ядре Солнца происходит термоядерный синтез, превращающий водород в гелий и выделяющий колоссальное количество энергии.', wiki: 'https://ru.wikipedia.org/wiki/Солнце', nasa: 'https://science.nasa.gov/sun/' },
+                'Меркурий': { title: 'Меркурий', spec: '<span>Радиус:</span> 2,439 км<br><span>Год:</span> 88 суток<br><span>Температура:</span> от -180 до +430 °C<br><span>Слои:</span> Железное ядро -> Силикатная мантия -> Кора', text: 'Самая маленькая и близкая к Солнцу планета. Из-за отсутствия атмосферы поверхность испытывает резкие перепады температур и покрыта тысячами кратеров.', wiki: 'https://ru.wikipedia.org/wiki/Меркурий', nasa: 'https://science.nasa.gov/mercury/' },
+                'Венера': { title: 'Венера', spec: '<span>Радиус:</span> 6,051 км<br><span>Давление:</span> 92 атмосферы<br><span>Температура:</span> ~465 °C<br><span>Слои:</span> Железное ядро -> Мантия -> Кора', text: 'Самая горячая планета. Её плотная атмосфера из углекислого газа создаёт парниковый эффект. Вращается ретроградно.', wiki: 'https://ru.wikipedia.org/wiki/Венера', nasa: 'https://science.nasa.gov/venus/' },
+                'Земля': { title: 'Земля', spec: '<span>Радиус:</span> 6,371 км<br><span>Площадь воды:</span> 70.8%<br><span>Слои:</span> Металлическое ядро -> Мантия -> Кора', text: 'Единственное известное космическое тело, населенное жизнью. Имеет мощное магнитное поле и азотно-кислородную атмосферу.', wiki: 'https://ru.wikipedia.org/wiki/Земля', nasa: 'https://science.nasa.gov/earth/' },
+                'Марс': { title: 'Марс', spec: '<span>Радиус:</span> 3,389 км<br><span>Высшая точка:</span> Олимп (22 км)<br><span>Слои:</span> Ядро -> Мантия -> Кора с оксидом железа', text: '«Красная планета», названная так из-за ржавчины в почве. Обладает разреженной атмосферой и полярными ледяными шапками.', wiki: 'https://ru.wikipedia.org/wiki/Марс', nasa: 'https://science.nasa.gov/mars/' },
+                'Юпитер': { title: 'Юпитер', spec: '<span>Радиус:</span> 69,911 км<br><span>Тип:</span> Газовый гигант<br><span>Слои:</span> Каменное ядро -> Металлический водород -> Атмосфера', text: 'Крупнейшая планета. Состоит в основном из водорода и гелия. Знаменит Большим Красным Пятном — гигантским штормом.', wiki: 'https://ru.wikipedia.org/wiki/Юпитер', nasa: 'https://science.nasa.gov/jupiter/' },
+                'Сатурн': { title: 'Сатурн', spec: '<span>Радиус:</span> 58,232 км<br><span>Ширина колец:</span> до 282,000 км<br><span>Слои:</span> Ядро -> Жидкий водород -> Атмосфера', text: 'Газовый гигант, обладающий самой впечатляющей системой концентрических колец из ледяных глыб и пыли.', wiki: 'https://ru.wikipedia.org/wiki/Сатурн', nasa: 'https://science.nasa.gov/saturn/' },
+                'Уран': { title: 'Уран', spec: '<span>Радиус:</span> 25,362 км<br><span>Наклон оси:</span> 97.77°<br><span>Слои:</span> Ядро -> Ледяная мантия -> Водородная кора', text: 'Ледяной гигант, который вращается, «лежа на боку». Имеет бледный бирюзовый цвет из-за присутствия метана.', wiki: 'https://ru.wikipedia.org/wiki/Уран', nasa: 'https://science.nasa.gov/uranus/' },
+                'Нептун': { title: 'Нептун', spec: '<span>Радиус:</span> 24,622 км<br><span>Скорость ветра:</span> до 2,100 км/ч<br><span>Слои:</span> Ядро -> Водно-аммиачный лед -> Атмосфера', text: 'Самая дальняя планета. Имеет насыщенный синий цвет и самые сильные ветры в Солнечной системе.', wiki: 'https://ru.wikipedia.org/wiki/Нептун', nasa: 'https://science.nasa.gov/neptune/' }
+            },
+            tj: {
+                // (Для краткости кода переводы сокращены, логика идентична)
+                'Солнце': { title: 'Офтоб', spec: '<span>Қатр:</span> 1,392,700 км<br><span>Ҳарорат:</span> ~15,000,000 °C<br><span>Қатламҳо:</span> Ҳаста -> Минтақа -> Тоҷ', text: 'Стораи марказӣ ва ягонаи системаи Хуршедӣ.', wiki: 'https://tg.wikipedia.org/wiki/Ахтар', nasa: 'https://science.nasa.gov/sun/' },
+                'Меркурий': { title: 'Уторид', spec: '<span>Радиус:</span> 2,439 км<br><span>Ҳарорат:</span> аз -180 то +430 °C', text: 'Хурдтарин сайёра ва наздиктарин ба Офтоб.', wiki: 'https://tg.wikipedia.org/wiki/Уторид', nasa: 'https://science.nasa.gov/mercury/' },
+                'Венера': { title: 'Зӯҳра', spec: '<span>Радиус:</span> 6,051 км<br><span>Ҳарорат:</span> ~465 °C', text: 'Сайёраи дуюм, гармтарин сайёраи системаи мост.', wiki: 'https://tg.wikipedia.org/wiki/Зӯҳра', nasa: 'https://science.nasa.gov/venus/' },
+                'Земля': { title: 'Замин', spec: '<span>Радиус:</span> 6,371 км<br><span>Масоҳати об:</span> 70.8%', text: 'Ягона ҷисми кайҳонӣ, ки дар он ҳаёт кашф шудааст.', wiki: 'https://tg.wikipedia.org/wiki/Замин', nasa: 'https://science.nasa.gov/earth/' },
+                'Марс': { title: 'Миррих', spec: '<span>Радиус:</span> 3,389 км<br><span>Нуқтаи олӣ:</span> Олимп (22 км)', text: '«Сайёраи сурх», бо сабаби оксиди оҳан дар хокаш.', wiki: 'https://tg.wikipedia.org/wiki/Миррих', nasa: 'https://science.nasa.gov/mars/' },
+                'Юпитер': { title: 'Муштарӣ', spec: '<span>Радиус:</span> 69,911 км<br><span>Намуд:</span> Азими газӣ', text: 'Калонтарин сайёраи системаи Хуршедӣ.', wiki: 'https://tg.wikipedia.org/wiki/Муштарӣ', nasa: 'https://science.nasa.gov/jupiter/' },
+                'Сатурн': { title: 'Зуҳал', spec: '<span>Радиус:</span> 58,232 км<br><span>Зичӣ:</span> 0.69 г/см³', text: 'Сайёраи газии дуюм бо системаи ҳалқаҳои аҷиб.', wiki: 'https://tg.wikipedia.org/wiki/Зуҳал', nasa: 'https://science.nasa.gov/saturn/' },
+                'Уран': { title: 'Уран', spec: '<span>Радиус:</span> 25,362 км<br><span>Моилии тир:</span> 97.77°', text: 'Сайёрае, ки тири чархишаш дар паҳлу хобидааст.', wiki: 'https://tg.wikipedia.org/wiki/Уран_(сайёра)', nasa: 'https://science.nasa.gov/uranus/' },
+                'Нептун': { title: 'Нептун', spec: '<span>Радиус:</span> 24,622 км<br><span>Суръати шамол:</span> то 2,100 км/соат', text: 'Дӯртарин сайёраи системаи Хуршедӣ.', wiki: 'https://tg.wikipedia.org/wiki/Нептун_(сайёра)', nasa: 'https://science.nasa.gov/neptune/' }
+            }
+        };
+
+        let currentLang = 'ru';
+        let currentSelectedPlanetKey = 'Солнце';
+        let isPaused = false;
+        let isTracking = false;
+
+        const i18n = {
+            ru: {
+                title: "Собери Солнечную Систему", startInfo: "Выберите планету слева и кликом установите на орбиту",
+                placingMode: "Режим установки: Кликните на орбиту для ", success: "Успешно! Планета установлена.",
+                error: "Не попали на нужную орбиту.", win: "Ура! Вы собрали всю Систему!",
+                sun: "Солнце", moreWiki: "Википедия", moreNasa: "NASA Science",
+                sliceLabel: "Разрез:", pause: "⏸ Пауза", play: "▶ Пуск",
+                focus: "🎯 Следить за объектом", unfocus: "🛑 Отменить слежение", removeSlice: "❌ Убрать",
+                names: { 'Меркурий': 'Меркурий', 'Венера': 'Венера', 'Земля': 'Земля', 'Марс': 'Марс', 'Юпитер': 'Юпитер', 'Сатурн': 'Сатурн', 'Уран': 'Уран', 'Нептун': 'Нептун' }
+            },
+            tj: {
+                title: "Системаи Офтобиро тартиб деҳ", startInfo: "Сайёраро интихоб кунед ва ба мадори он гузоред",
+                placingMode: "Ҳолати насб: Ба мадор клик кунед барои ", success: "Офарин! Гузошта шуд.",
+                error: "Ба мадори дуруст наафтодед.", win: "ОФАРИН! Система ҷамъ шуд!",
+                sun: "Офтоб", moreWiki: "Википедия", moreNasa: "NASA",
+                sliceLabel: "Буриш:", pause: "⏸ Таваққуф", play: "▶ Старт",
+                focus: "🎯 Пайгирӣ кардан", unfocus: "🛑 Қатъи пайгирӣ", removeSlice: "❌ Бардоштан",
+                names: { 'Меркурий': 'Уторид', 'Венера': 'Зӯҳра', 'Земля': 'Замин', 'Марс': 'Миррих', 'Юпитер': 'Муштарӣ', 'Сатурн': 'Зуҳал', 'Уран': 'Уран', 'Нептун': 'Нептун' }
+            }
+        };
+
+        function toggleLanguage() { currentLang = currentLang === 'ru' ? 'tj' : 'ru'; updateUI(); showInfoFor(currentSelectedPlanetKey); }
+        function togglePause() { isPaused = !isPaused; updateUI(); }
+
+        function updateUI() {
+            document.getElementById('main-title').innerText = i18n[currentLang].title;
+            const statusNode = document.getElementById('status');
+            if (!currentPlacingPlanet && activePlanets.length === 0) statusNode.innerText = i18n[currentLang].startInfo;
+            else if (currentPlacingPlanet) statusNode.innerText = i18n[currentLang].placingMode + i18n[currentLang].names[currentPlacingPlanet.name];
+            else if (activePlanets.length === Object.keys(PLANET_CONFIGS).length) statusNode.innerHTML = `<span style='color: #00ff00;'>${i18n[currentLang].win}</span>`;
+            
+            document.querySelectorAll('.planet-card').forEach(card => card.querySelector('.planet-label').innerText = i18n[currentLang].names[card.getAttribute('data-name')]);
+            if(document.getElementById('label-sun')) document.getElementById('label-sun').innerText = i18n[currentLang].sun;
+            activePlanets.forEach(p => { if(document.getElementById(`label-${p.name}`)) document.getElementById(`label-${p.name}`).innerText = i18n[currentLang].names[p.name]; });
+            
+            document.getElementById('pause-btn').innerText = isPaused ? i18n[currentLang].play : i18n[currentLang].pause;
+            document.getElementById('slice-label').innerText = i18n[currentLang].sliceLabel;
+            document.getElementById('remove-slice-btn').innerText = i18n[currentLang].removeSlice;
+        }
+
+        // --- Управление Разрезами ---
+        let trackedSliceObject = null;
+        let sliceOffset = 5.0;
+
+        function setClipping(objectGroup, enable) {
+            if(!objectGroup) return;
+            objectGroup.children.forEach(c => {
+                if (c.material) {
+                    c.material.clippingPlanes = enable ? [slicePlane] : [];
+                    c.material.needsUpdate = true;
+                }
+            });
+        }
+
+        function setupSliceUI(objectGroup, size) {
+            // Разрез сохраняется на объекте, пока не нажата кнопка "Убрать"
+            if (trackedSliceObject && trackedSliceObject !== objectGroup) setClipping(trackedSliceObject, false);
+            
+            trackedSliceObject = objectGroup;
+            setClipping(trackedSliceObject, true);
+            
+            const panel = document.getElementById('slice-controls');
+            const slider = document.getElementById('slice-slider');
+            slider.min = -size - 0.2; slider.max = size + 0.2; slider.value = size + 0.2;
+            sliceOffset = parseFloat(slider.value);
+            panel.style.display = 'flex';
+        }
+
+        function removeSlice() {
+            setClipping(trackedSliceObject, false);
+            trackedSliceObject = null;
+            document.getElementById('slice-controls').style.display = 'none';
+        }
+
+        document.getElementById('slice-slider').addEventListener('input', (e) => { sliceOffset = parseFloat(e.target.value); });
+
+        // --- Следящая Камера (Фокус) ---
+        let focusedPlanetMesh = null;
+        let lastTargetPos = new THREE.Vector3();
+
+        function toggleFocus() {
+            isTracking = !isTracking;
+            const btn = document.getElementById('focus-btn');
+            
+            if (isTracking) {
+                focusedPlanetMesh = currentSelectedPlanetKey === 'Солнце' ? sunGroup : activePlanets.find(p => p.name === currentSelectedPlanetKey)?.mesh;
+                if(focusedPlanetMesh) {
+                    focusedPlanetMesh.getWorldPosition(lastTargetPos);
+                    btn.innerText = i18n[currentLang].unfocus;
+                    btn.classList.add('focus-active');
+                } else {
+                    isTracking = false; // Планета еще не на орбите
+                }
+            } else {
+                focusedPlanetMesh = null;
+                controls.target.set(0, 0, 0); // Возврат в центр
+                btn.innerText = i18n[currentLang].focus;
+                btn.classList.remove('focus-active');
+            }
+        }
+
+        function showInfoFor(objKey) {
+            currentSelectedPlanetKey = objKey;
+            const data = spaceEncyclopedia[currentLang][objKey];
+            const content = document.getElementById('info-content');
+            
+            // Если мы уже отслеживаем этот объект, кнопка должна быть активна
+            const isCurrentlyTracked = isTracking && focusedPlanetMesh && 
+                  ((objKey === 'Солнце' && focusedPlanetMesh === sunGroup) || 
+                   (activePlanets.find(p => p.mesh === focusedPlanetMesh)?.name === objKey));
+
+            const focusClass = isCurrentlyTracked ? 'info-btn focus-active' : 'info-btn';
+            const focusText = isCurrentlyTracked ? i18n[currentLang].unfocus : i18n[currentLang].focus;
+
+            content.innerHTML = `
+                <div class="info-title">${data.title}</div>
+                <div class="info-spec">${data.spec}</div>
+                <div class="info-text">${data.text}</div>
+                <button id="focus-btn" class="${focusClass}" onclick="toggleFocus()">${focusText}</button>
+                <div class="info-links">
+                    <a href="${data.wiki}" target="_blank" class="info-btn">🌐 ${i18n[currentLang].moreWiki}</a>
+                    <a href="${data.nasa}" target="_blank" class="info-btn">🚀 ${i18n[currentLang].moreNasa}</a>
+                </div>
+            `;
+            document.getElementById('info-panel').classList.add('active');
+        }
+
+        function hideInfoPanel() {
+            document.getElementById('info-panel').classList.remove('active');
+            // При закрытии панели разрез НЕ пропадает (он пропадает только по кнопке "Убрать")
+        }
+
+        // --- Настройки планет ---
+        const PLANET_CONFIGS = {
+            'Меркурий': { size: 0.4,  radius: 14, speed: 0.025, texUrl: TEXTURES['Меркурий'], coreColor: 0x555555, mantleColor: 0x999999 },
+            'Венера':   { size: 0.85, radius: 19, speed: 0.020, texUrl: TEXTURES['Венера'], coreColor: 0xffaa00, mantleColor: 0xcc5500 },
+            'Земля':    { size: 0.9,  radius: 25, speed: 0.015, texUrl: TEXTURES['Земля'], coreColor: 0xffdd00, mantleColor: 0xd44400 },
+            'Марс':     { size: 0.55, radius: 31, speed: 0.012, texUrl: TEXTURES['Марс'], coreColor: 0x442211, mantleColor: 0xaa3300 },
+            'Юпитер':   { size: 2.2,  radius: 41, speed: 0.008, texUrl: TEXTURES['Юпитер'], coreColor: 0x111133, mantleColor: 0x6655aa },
+            'Сатурн':   { size: 1.8,  radius: 51, speed: 0.006, texUrl: TEXTURES['Сатурн'], hasRings: true, coreColor: 0x222233, mantleColor: 0x887755 },
+            'Уран':     { size: 1.3,  radius: 61, speed: 0.004, texUrl: TEXTURES['Уран'], coreColor: 0x334466, mantleColor: 0x11aaee },
+            'Нептун':   { size: 1.25, radius: 70, speed: 0.003, texUrl: TEXTURES['Нептун'], coreColor: 0x223355, mantleColor: 0x1166cc }
+        };
+
+        function initSidebar() {
+            const sidebar = document.getElementById('sidebar'); sidebar.innerHTML = '';
+            Object.keys(PLANET_CONFIGS).forEach(key => {
+                const card = document.createElement('div'); card.className = 'planet-card'; card.id = `card-${key}`; card.setAttribute('data-name', key);
+                card.onclick = () => selectPlanet(key);
+                card.innerHTML = `<img src="${PLANET_CONFIGS[key].texUrl}" class="planet-img" alt="${key}"><div class="planet-label">${i18n[currentLang].names[key]}</div>`;
+                sidebar.appendChild(card);
+            });
+        }
+
+        // --- Инициализация 3D сцены ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 65, 95);
+
+        const slicePlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 999);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.localClippingEnabled = true;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Звезды
+        const starsGeom = new THREE.BufferGeometry(); const starsPos = new Float32Array(3500 * 3);
+        for(let i=0; i<10500; i+=3) { const r=400+Math.random()*200, u=Math.random(), v=Math.random(), t=u*2*Math.PI, p=Math.acos(2*v-1); starsPos[i]=r*Math.sin(p)*Math.cos(t); starsPos[i+1]=r*Math.sin(p)*Math.sin(t); starsPos[i+2]=r*Math.cos(p); }
+        starsGeom.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+        const starField = new THREE.Points(starsGeom, new THREE.PointsMaterial({ color: 0xffffff, size: 0.7 })); scene.add(starField);
+
+        scene.add(new THREE.AmbientLight(0x444444));
+        const sunLight = new THREE.PointLight(0xffffff, 2.5, 400); scene.add(sunLight);
+
+        // --- Реалистичное Солнце ---
+        const sunGroup = new THREE.Group(); scene.add(sunGroup);
+        const sunTex = textureLoader.load(TEXTURES['Солнце']);
+        const sunCrust = new THREE.Mesh(new THREE.SphereGeometry(5.5, 64, 64), new THREE.MeshBasicMaterial({ map: sunTex, side: THREE.DoubleSide }));
+        sunCrust.userData = { isSun: true };
+        const sunMantle = new THREE.Mesh(new THREE.SphereGeometry(3.85, 32, 32), new THREE.MeshBasicMaterial({ color: 0xff3300, side: THREE.DoubleSide }));
+        const sunCore = new THREE.Mesh(new THREE.SphereGeometry(1.9, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+        sunGroup.add(sunCrust, sunMantle, sunCore);
+
+        const labelsContainer = document.getElementById('labels-container');
+        const activeLabels = [];
+        activeLabels.push({ element: createLabel('sun', i18n[currentLang].sun, true), mesh: sunGroup, offsetY: 6.5 });
+
+        function createLabel(id, text, isSun=false) {
+            const div = document.createElement('div'); div.className = isSun ? 'space-label sun-label' : 'space-label';
+            div.id = `label-${id}`; div.innerText = text; labelsContainer.appendChild(div); return div;
+        }
+
+        Object.values(PLANET_CONFIGS).forEach(p => {
+            const pts = []; for(let i=0; i<=128; i++) { const t=(i/128)*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(t)*p.radius, 0, Math.sin(t)*p.radius)); }
+            scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12 })));
+        });
+
+        // --- Установка планет ---
+        const activePlanets = [];
+        let currentPlacingPlanet = null;
+        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(); const planeY = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        function selectPlanet(name) {
+            if (currentPlacingPlanet) { document.getElementById(`label-${currentPlacingPlanet.name}`)?.remove(); scene.remove(currentPlacingPlanet.mesh); }
+            const found = activePlanets.find(p => p.name === name);
+            if (found) { showInfoFor(name); setupSliceUI(found.mesh, found.size); return; }
+
+            showInfoFor(name);
+            const config = PLANET_CONFIGS[name]; const group = new THREE.Group();
+            
+            // Загрузка текстуры
+            const tex = textureLoader.load(config.texUrl);
+            const crustMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.1, side: THREE.DoubleSide });
+            const crustMesh = new THREE.Mesh(new THREE.SphereGeometry(config.size, 64, 64), crustMat);
+            crustMesh.userData = { planetName: name }; group.add(crustMesh);
+            
+            const mantleMesh = new THREE.Mesh(new THREE.SphereGeometry(config.size*0.72, 32, 32), new THREE.MeshStandardMaterial({ color: config.mantleColor, roughness: 0.7, side: THREE.DoubleSide })); group.add(mantleMesh);
+            const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(config.size*0.38, 32, 32), new THREE.MeshStandardMaterial({ color: config.coreColor, metalness: 0.8, roughness: 0.2, side: THREE.DoubleSide })); group.add(coreMesh);
+
+            if (config.hasRings) {
+                const ringTex = textureLoader.load(TEXTURES['Кольцо']);
+                const ringMat = new THREE.MeshStandardMaterial({ map: ringTex, color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+                const ring = new THREE.Mesh(new THREE.RingGeometry(config.size*1.3, config.size*2.6, 64), ringMat);
+                ring.rotation.x = Math.PI / 2; group.add(ring);
+            }
+
+            scene.add(group);
+            const lbl = createLabel(name, i18n[currentLang].names[name]);
+            currentPlacingPlanet = { name: name, mesh: group, targetRadius: config.radius, speed: config.speed, angle: Math.random()*Math.PI*2, size: config.size };
+            activeLabels.push({ element: lbl, mesh: group, offsetY: config.size + 1.5 });
+            controls.enabled = false; updateUI(); setupSliceUI(group, config.size);
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (!currentPlacingPlanet) return;
+            mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
+            raycaster.setFromCamera(mouse, camera); const pt = new THREE.Vector3(); raycaster.ray.intersectPlane(planeY, pt);
+            currentPlacingPlanet.mesh.position.copy(pt);
+        });
+
+        window.addEventListener('click', (e) => {
+            if(e.target.closest('#sidebar') || e.target.closest('#info-panel') || e.target.closest('#top-left-panel') || e.target.closest('#bottom-panel')) return;
+            if (currentPlacingPlanet) {
+                if (Math.abs(currentPlacingPlanet.mesh.position.length() - currentPlacingPlanet.targetRadius) < 3.5) {
+                    activePlanets.push(currentPlacingPlanet);
+                    const card = document.getElementById(`card-${currentPlacingPlanet.name}`); if(card) { card.style.opacity='0.5'; card.style.borderColor='#00ffcc'; }
+                    document.getElementById('status').innerText = i18n[currentLang].success;
+                    currentPlacingPlanet = null; controls.enabled = true; updateUI();
+                } else document.getElementById('status').innerText = i18n[currentLang].error;
+                return;
+            }
+            
+            mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
+            raycaster.setFromCamera(mouse, camera);
+            const meshes = [sunCrust]; activePlanets.forEach(p => p.mesh.children.forEach(c => meshes.push(c)));
+            const intersects = raycaster.intersectObjects(meshes);
+            if(intersects.length > 0) {
+                const hit = intersects[0].object;
+                if(hit.userData.isSun) { showInfoFor('Солнце'); setupSliceUI(sunGroup, 5.5); }
+                else if(hit.userData.planetName) { const nm=hit.userData.planetName; showInfoFor(nm); setupSliceUI(activePlanets.find(p=>p.name===nm).mesh, activePlanets.find(p=>p.name===nm).size); }
+            } else hideInfoPanel();
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isPaused) {
+                sunGroup.children.forEach(c => c.rotation.y += 0.001); starField.rotation.y += 0.0001;
+                activePlanets.forEach(p => {
+                    p.angle += p.speed;
+                    p.mesh.position.set(Math.cos(p.angle)*p.targetRadius, 0, Math.sin(p.angle)*p.targetRadius);
+                    p.mesh.children.forEach(c => { if (c.geometry.type === "SphereGeometry") c.rotation.y += 0.015; });
+                });
+            }
+
+            // Логика камеры-шпиона (Фокус)
+            if (isTracking && focusedPlanetMesh) {
+                const currentPos = new THREE.Vector3();
+                focusedPlanetMesh.getWorldPosition(currentPos);
+                // Смещаем саму камеру на то же расстояние, на которое сдвинулась планета
+                const delta = new THREE.Vector3().subVectors(currentPos, lastTargetPos);
+                camera.position.add(delta);
+                // Заставляем OrbitControls смотреть точно на объект
+                controls.target.copy(currentPos);
+                lastTargetPos.copy(currentPos);
+            }
+
+            // Логика разреза (следует за планетой)
+            if (trackedSliceObject) {
+                const wPos = new THREE.Vector3(); trackedSliceObject.getWorldPosition(wPos);
+                slicePlane.normal.set(-1, 0, 0); slicePlane.constant = wPos.x + sliceOffset;
+            }
+
+            controls.update(); renderer.render(scene, camera);
+            const tV = new THREE.Vector3();
+            activeLabels.forEach(l => {
+                l.mesh.getWorldPosition(tV); tV.y+=l.offsetY; tV.project(camera);
+                if (tV.z>1) { l.element.style.opacity='0'; return; }
+                l.element.style.opacity='1'; l.element.style.left=`${(tV.x*.5+.5)*window.innerWidth}px`; l.element.style.top=`${(tV.y*-.5+.5)*window.innerHeight}px`;
+            });
+        }
+
+        initSidebar(); updateUI(); showInfoFor('Солнце'); setupSliceUI(sunGroup, 5.5); animate();
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    </script>
+</body>
+</html>
